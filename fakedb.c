@@ -10,12 +10,11 @@
 int main(int argc, char *argv[])
 {
     struct money *g6 = setMoney(30000.00, 35);
-    
-    printf("\nIf I do make-run on QEMU morello-purecap, it falls over here.\n\n");
 
     // this shouldn't crash
     char *eid;
     eid = (char*)malloc(sizeof(char));
+    printf("\nIf I do make-run on QEMU morello-purecap, it falls over here:\n\n");
     strcpy((char*)eid,"0"); 
     char *enm = malloc(10);
     strcpy(enm, "Bartleby");
