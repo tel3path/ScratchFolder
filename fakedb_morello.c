@@ -36,197 +36,131 @@ int main(int argc, char *argv[])
 {
     // money for the employee's salary
     struct money *g6 = setMoney(30000.00, 35);
-    bool bTag = cheri_tag_get(g6);
-    printf("Is employee salary capability tagged? %d\n", bTag);
-    bool bValid = cheri_is_valid(g6);
-    printf("Is employee salary capability tag valid? %d\n", bValid);
-    if(bValid == 1) {
-        cheri_tag_clear(g6);
-        bTag = cheri_tag_get(g6);
-        printf("Just cleared the tag: %d\n", bTag);
-        if(cheri_is_invalid(g6)) {
-            printf("FTFY\n");
-        }
-    }
     
-    // the price of goods
-    struct money *allOnePrice = setMoney(0, 99);
-    bTag = cheri_tag_get(allOnePrice);
-    printf("Is price capability tagged? %d\n", bTag);
-    bValid = cheri_is_valid(allOnePrice);
-    printf("Is price capability tag valid? %d\n", bValid);
-    
-    // our basic customer
-    struct customer c1 = setCustomer(0, "Herman");
-    //printCustomer(c1, true);
-    
-    // an address
-    // this is a pointless way to assign values, considering strcpy.
-    // Oh well
-    int a1id = 0;
-    char a1l1[101];
-    strcpy(a1l1, "15 Acacia Avenue");
-    char a1l2[101];
-    strcpy(a1l2, "Little Snoring");
-    char a1l3[101];
-    char a1l4[101];
-    char a1l5[101];
-    char a1rgn[101];
-    strcpy(a1rgn, "Wiltshire");
-    char a1pc[21];
-    strcpy(a1pc, "90210");
-    char a1ctry[101];
-    strcpy(a1ctry, "United Kingdom");
-    struct address a1 = setAddress(a1id, a1l1, a1l2, a1l3, a1l4, a1l5, a1rgn, a1pc, a1ctry);
-    //printAddress(a1, true);
+    printf("\nBartleby is an employee.\n");
+    printf("Bartleby has an employee ID which is a char.\n");
+    printf("Let's see if we can overflow that char and crash this.\n");
+    printf("Trying make-run on QEMU morello-purecap\n\n");
+    printf("My guess is you will see the following:\n");
+    printf("Connection to localhost closed.\n");
+    printf("make: *** [build/Makefile.simple:46: run-fakedb_morello] Error 255\n");
 
-    int intlimit = INT_MAX;
-    float overfloat = 6000000.01;
-
-    // the employee
-    char eid = 48;
-    char enm[101];
+    // the employee id
+    // this shouldn't crash
+    char *eid;
+    // allocate the right amount of memory for a char
+    eid = (char*)malloc(sizeof(char));
+    // now give it an appropriate value for a char
+    strcpy((char*)eid,"0"); 
+    printf("\n\nEmployee id after allocating a char's worth = %c\n", *eid);
+    // now set up the other employee attributes
+    char *enm = malloc(10);
     strcpy(enm, "Bartleby");
     char ejt[101];
     strcpy(ejt, "Scrivener");
     int emid = 0;
     char esd[11];
     strcpy(esd, "2020-06-30");
-    struct employee e1 = setEmployee(eid, enm, ejt, emid, esd, g6);
-    printf("Employee ID is supposed to be a char, and is a char, so the following should look like it's supposed to:\n\n");
+    // now construct the employee
+    struct employee *e1 = setEmployee(eid, enm, ejt, emid, esd, g6); 
+    printf("Employee ID is set to the right type and size (char), so this should look right:\n\n");
     printEmployee(e1, true);
-    printf("Input %c, displayed %c, value is %c\n\n", eid, e1.empId, e1.empId); 
+    printf("Input %c, displayed %c, value is %c\n\n", *eid, e1->empId, e1->empId);
+    // free the employee ID char
+    free(eid);
     
-    // not sure outputting it to a file is useful
-    /*FILE *fptr;
-    fptr = fopen("blorf.txt","w");
-    if(fptr == NULL) {
-      printf("Error!");
-      exit(1);
-    }
-    fprintf(fptr,"mode,expected type,original param,expected display,input type,input param,displayed conversion,type-appropriate conversion\n");
-    fprintf(fptr,"==================================================================================\n");
-    fprintf(fptr,"vanilla,char,48,0,char,48,%c,%c\n", e1.empId, e1.empId);*/
+    // hopefully this *should* crash
+    printf("Now let's try overflowing the employee ID char.\n");
+    printf("I know this would have crashed it elsewhere, doesn\'t seem to on Apple clang version 13.0.0.\n");
+    printf("And doesn't seem to on g++ (Debian 10.2.1-6) 10.2.1 20210110\n");
+    printf("Quadrupling the allocation to the employee ID char AND making it unsigned:\n");
+    eid = (unsigned char*)malloc(4*sizeof(unsigned char));
+    printf("Now writing 8 bytes to employee ID char (8 times too much for a char, twice the amount given to malloc):\n");
+    strcpy((char*)eid,"01234567"); 
+    printf("eid = %c\n", *eid);
+    printf("Now freeing the new empId and hoping *that* crashes it (like it used to):\n");
+    free(eid);    //crash plz?
+    printf("the new empId after freeing = %c\n", *eid);
+    printf("And if that didn't crash it let's try assigning the too-big value to the employee structure:\n");
+    e1->empId = *eid;
+    printEmployee(e1, true);
+    printf("Input %c, displayed %c, value is %c\n\n", *eid, e1->empId, e1->empId); 
     
-    signed char sc1 = -127;
+    printf("\n\nWhy didn't it crash? Char is only supposed to be %zu\n", sizeof(char));
+    
+    printf("Well, let's try this. I gave the employee member empName 10 chars,\n");
+    printf("but I'm still going to allocate 101, then put in a string longer than 10 but shorter than 101.\n");
+    printf("Then I'll try to free it. That should crash it.\n\n");
+    printf("Allocating 101 chars to a variable:\n");
+    enm = malloc(101);
+    printf("Now giving the variable a string no more than 50 chars long\n");
+    strcpy(enm, "123456789101112ladybugscametotheladybugs\'picnic");
+    printf("Now assigning it to the (10-char) employee member, empName\n");
+    printf("At this point on Apple clang I get \"illegal hardware instruction  ./fakedb_vanilla\n");
+    strcpy(e1->empName, enm);
+    printf("Now giving the employee their last name\n");
+    strcpy(ejt, "Scrivener");
+    printf("Now setting the employee's start date\n");
+    strcpy(esd, "2020-06-30");
+    printf("Now let's look at the employee\n");
+    printEmployee(e1, true);
+    printf("Now freeing up that employee's memory:\n");
+    free(e1);
+    
+    printf("If I compile and run this on Debian I get this far.\n");
+    printf("The employee name displays correctly, but the job title contains all but the first 10 characters of the empName.\n");
+    
+    /*signed char sc1 = -127;
     printf("Setting the employee ID char to a signed char, so the following should look wrong:\n\n");
-    e1.empId = sc1;
+    e1->empId = sc1;
     printEmployee(e1, true);
-    printf("Input %d, expected %d, got %c\n\n", sc1, e1.empId, e1.empId);
-    //fprintf(fptr,"vanilla,char,48,0,signed char,-127,%c,%d\n", e1.empId, e1.empId);
+    printf("Input %d, expected %d, got %c\n\n", sc1, e1->empId, e1->empId);
     printf("Subtracting 4 from %d\n", sc1);
     sc1 -= 4;
-    e1.empId = sc1;
+    e1->empId = sc1;
     printEmployee(e1, true);
-    printf("Input %d, expected %d, got %c\n\n", sc1, e1.empId, e1.empId);
+    printf("Input %d, expected %d, got %c\n\n", sc1, e1->empId, e1->empId);
     
     unsigned char uc1 = 255;
     printf("Setting the employee ID char to an unsigned char, so the following should look wrong:\n\n");
-    e1.empId = uc1;
+    e1->empId = uc1;
     printEmployee(e1, true);
-    printf("Input %d, displayed %c, value is %d\n\n", uc1, e1.empId, e1.empId);
-    //fprintf(fptr,"vanilla,char,48,0,unsigned char,255,%c,%d\n", e1.empId, e1.empId);
+    printf("Input %d, displayed %c, value is %d\n\n", uc1, e1->empId, e1->empId);
     printf("Adding 4 to %d\n", uc1);
     uc1 += 4;
-    e1.empId = uc1;
+    e1->empId = uc1;
     printEmployee(e1, true);
-    printf("Input %d, expected %d, got %c\n\n", uc1, e1.empId, e1.empId);
+    printf("Input %d, expected %d, got %c\n\n", uc1, e1->empId, e1->empId);
 
     
     short int si1 = 32767;
     printf("Setting the employee ID char to a short int, so the following should look wrong:\n\n");
-    e1.empId = si1;
+    e1->empId = si1;
     printEmployee(e1, true);
-    printf("Input %d, displayed %c, value is %d\n\n", si1, e1.empId, e1.empId);
-    //fprintf(fptr,"vanilla,char,48,0,short int,32767,%c,%d\n", e1.empId, e1.empId);
+    printf("Input %d, displayed %c, value is %d\n\n", si1, e1->empId, e1->empId);
     printf("Adding 4 to %d\n", si1);
     si1 += 4;
-    e1.empId = si1;
+    e1->empId = si1;
     printEmployee(e1, true);
-    printf("Input %d, expected %d, got %c\n\n", si1, e1.empId, e1.empId);
-
-    
-    //fclose(fptr);
-    
-    // the order
-    int oid = 0;
-    char od[11];
-    strcpy(od, "2022-11-07");
-    char odd[11];
-    strcpy(odd, "2022-13-07");
-    bool obd = false;
-    char oir[21];
-    strcpy(oir, "1234567");
-    char oin[101];
-    strcpy(oin, "Banana Bender");
-    int oq = 33;
-    struct order o1 = setOrder(oid, od, c1, a1, odd, obd, oir, oin, oq, allOnePrice);
-    //printOrder(o1, true);
-
-    // relation of employee and order
-    int eoid = 0;
-    struct employee_order eo1 = setEmployeeOrder(eoid, e1, o1);
-    //printEmployeeOrder(eo1);
+    printf("Input %d, expected %d, got %c\n\n", si1, e1->empId, e1->empId);*/
     
     return 0;
-}
-
-/**
-* Takes in every member of an address struct, instantiates it,
-* sets the values, and returns it
-*/
-struct address setAddress(int aid, char al1[101], char al2[101], char al3[101], 
-char al4[101], char al5[101], char ar[101], char apc[101], char actry[101]) {
-    struct address a;
-    a.addrId = aid;
-    strcpy(a.address1, al1);
-    strcpy(a.address2, al2);
-    strcpy(a.address3, al3);
-    strcpy(a.address4, al4);
-    strcpy(a.address5, al5);
-    strcpy(a.region, ar);
-    strcpy(a.postcode, apc);
-    strcpy(a.country, actry);
-    return a;
-}
-
-/**
-* Takes in every member of a customer struct, instantiates it,
-* sets the values, and returns it
-*/
-struct customer setCustomer(int cid, char cname[101]) {
-	struct customer c;
-	c.custId = cid;
-	strcpy(c.custName, cname);
-	return c;
 }
 
 /**
 * Takes in every member of an employee struct, instantiates it,
 * sets the values, and returns it
 */
-struct employee setEmployee(char eid, char enm[101], char ejt[101], int emgr, char esd[11],
+struct employee * setEmployee(char *eid, char enm[101], char ejt[101], int emgr, char esd[11],
 struct money *em) {
-	struct employee e;
-	e.empId = eid;
-	strcpy(e.empName, enm);
-	strcpy(e.jobTitle, ejt);
-	e.mgrId = emgr;
-	strcpy(e.startDate, esd);
-	e.salary = *em;
+	struct employee *e = malloc(sizeof (struct employee));
+	e->empId = *eid;
+	strcpy(e->empName, enm);
+	strcpy(e->jobTitle, ejt);
+	e->mgrId = emgr;
+	strcpy(e->startDate, esd);
+	e->salary = *em;
 	return e;
-}
-
-/**
-* Takes in every member of an employee-order struct, instantiates it,
-* sets the values, and returns it
-*/
-struct employee_order setEmployeeOrder(int eoid, struct employee eoe, struct order eoo) {
-    struct employee_order eo;
-    eo.emp_ord_id = eoid;
-    eo.emp = eoe;
-    eo.ord = eoo;
-    return eo;
 }
 
 /**
@@ -240,74 +174,19 @@ struct money * setMoney(long wd, unsigned char fd) {
 	return m;
 }
 
-/**
-* Takes in every member of an order struct, instantiates it,
-* sets the values, and returns it
-*/
-struct order setOrder(int oid, char od[11], struct customer oc, struct address oa, 
-char odd[11], bool obd, char oir[21], char oin[101], int oqt, struct money *oup) {
-	struct order o;
-	o.orderId = oid;
-	strcpy(o.orderDate, od);
-	o.cust = oc;
-	o.del_addr = oa;
-	strcpy(o.deliveryDate, odd);
-	o.bDelivered = obd;
-	strcpy(o.itemRef, oir);
-	strcpy(o.itemName, oin);
-	o.qty = oqt;
-	o.ppu = *oup;
-	return o;
-}
-
-/**
-* Formatting for comparison of output rather than
-* elegance of output
-*/
-void printAddress(struct address addr, bool bStandalone) {
-    if(bStandalone) {
-        printf("ADDRESS\n");
-        printf("=======\n");
-    }
-    printf("Address1 is %s\n", addr.address1);
-    printf("Address2 is %s\n", addr.address2);
-    printf("Address3 is %s\n", addr.address3);
-    printf("Address4 is %s\n", addr.address4);
-    printf("Address5 is %s\n", addr.address5);
-    printf("Region is %s\n", addr.region);
-    printf("Postcode is %s\n", addr.postcode);
-    printf("Country is %s\n", addr.country);
-    
-    if(bStandalone)
-        printf("\n");
-}
-
-void printCustomer(struct customer cust, bool bStandalone) {
-    if(bStandalone) {
-        printf("CUSTOMER\n");
-        printf("========\n");
-    }
-    
-    printf("Customer id is %d\n", cust.custId);
-    printf("Customer name is %s\n", cust.custName);
-    
-    if(bStandalone)
-        printf("\n");
-}
-
-void printEmployee(struct employee emp, bool bStandalone) {
+void printEmployee(struct employee *emp, bool bStandalone) {
     if(bStandalone) {
         printf("EMPLOYEE\n");
         printf("========\n");
     }
     
-    printf("Employee id is %c\n", emp.empId);
-    printf("Employee is %s\n", emp.empName);
-    printf("Employee job title is %s\n", emp.jobTitle);
-    printf("Employee manager id is %d\n", emp.mgrId);
-    printf("Employee start date was %s\n", emp.startDate);
+    printf("Employee id is %c\n", emp->empId);
+    printf("Employee is %s\n", emp->empName);
+    printf("Employee job title is %s\n", emp->jobTitle);
+    printf("Employee manager id is %d\n", emp->mgrId);
+    printf("Employee start date was %s\n", emp->startDate);
     printf("Employee salary is ");
-    printMoney(&emp.salary);
+    printMoney(&emp->salary);
     printf("\n");
     
     if(bStandalone)
@@ -320,41 +199,3 @@ void printEmployee(struct employee emp, bool bStandalone) {
 void printMoney(struct money *m) {
     printf("%ld.%d", m->whole_dollars, m->frac_dollar);
 }
-
-void printOrder(struct order ord, bool bStandalone) {
-    if(bStandalone) {
-        printf("ORDER\n");
-        printf("=====\n");
-    }
-    
-    printf("Order id is %d\n", ord.orderId);
-    printf("Order date is %s\n", ord.orderDate);
-    printCustomer(ord.cust, false);
-    printAddress(ord.del_addr, false);
-    printf("Delivery date is %s\n", ord.deliveryDate);
-    printf("Order has ");
-    if(!ord.bDelivered)
-        printf("not ");
-    printf("been delivered\n");
-    printf("Item ref is %s\n", ord.itemRef);
-    printf("Item name is %s\n", ord.itemName);
-    printf("Item quantity is %d\n", ord.qty);
-    printf("Price per unit is ");
-    printMoney(&ord.ppu);
-    printf("\n");
-
-    
-    if(bStandalone)
-        printf("\n");
-}
-
-void printEmployeeOrder(struct employee_order eo) {
-    printf("ORDER PLACED BY EMPLOYEE\n");
-    printf("========================\n");
-    printf("Employee/Order ID is %d\n", eo.emp_ord_id);
-    printf("Employee id is %c\n", eo.emp.empId);
-    printf("Employee name is %s\n", eo.emp.empName);
-    printf("Employee's manager is %d\n", eo.emp.mgrId);
-    printOrder(eo.ord, false);
-}
-
